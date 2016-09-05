@@ -1,0 +1,9 @@
+version: '2'
+services:
+  android-emulator:
+    image: snapshot.onegini.com/library/android-emulator:23
+    ports:
+      - 0.0.0.0:5554-5555:5554-5555/tcp
+      - 0.0.0.0:5900:5900/tcp
+    entrypoint: /entrypoint.sh
+

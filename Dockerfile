@@ -1,74 +1,61 @@
-# Android development environment for ubuntu.
-# version 0.0.5
+FROM ubuntu:16.04
 
-FROM ubuntu
+# Android Emulator properties
+ENV ANDROID_PLATFORM_VERSION 23
+ENV DEVICE_NAME=Android-Emulator-${ANDROID_PLATFORM_VERSION}
+ENV ARCH=x86
 
-MAINTAINER tracer0tong <yuriy.leonychev@gmail.com>
+RUN \
+  echo "debconf shared/accepted-oracle-license-v1-1 select true" | debconf-set-selections && \
+  echo "debconf shared/accepted-oracle-license-v1-1 seen true" | debconf-set-selections
 
-# Specially for SSH access and port redirection
-ENV ROOTPASSWORD android
+# Install Java
+RUN \
+  apt-get update && \
+  apt-get install -y software-properties-common && \
+  echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
+  add-apt-repository -y ppa:webupd8team/java && \
+  apt-get update && \
+  apt-get install -y oracle-java8-installer && \
+  rm -rf /var/lib/apt/lists/* && \
+  rm -rf /var/cache/oracle-jdk8-installer
+ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
 
-# Expose ADB, ADB control and VNC ports
-EXPOSE 22
-EXPOSE 5037
-EXPOSE 5554
-EXPOSE 5555
-EXPOSE 5900
-
-ENV DEBIAN_FRONTEND noninteractive
-RUN echo "debconf shared/accepted-oracle-license-v1-1 select true" | debconf-set-selections && \
-    echo "debconf shared/accepted-oracle-license-v1-1 seen true" | debconf-set-selections
-
-# Update packages
-RUN apt-get -y update && \
-    apt-get -y install software-properties-common bzip2 ssh net-tools openssh-server socat curl && \
-    add-apt-repository ppa:webupd8team/java && \
-    apt-get update && \
-    apt-get -y install oracle-java7-installer && \
-    rm -rf /var/lib/apt/lists/*
-
-# Install android sdk
-RUN wget -qO- http://dl.google.com/android/android-sdk_r23-linux.tgz | \
+# Install Android SDK
+RUN \
+  wget -qO- http://dl.google.com/android/android-sdk_r${ANDROID_PLATFORM_VERSION}-linux.tgz | \
     tar xvz -C /usr/local/ && \
-    mv /usr/local/android-sdk-linux /usr/local/android-sdk && \
-    chown -R root:root /usr/local/android-sdk/
-
-# Install apache ant
-RUN wget -qO- http://archive.apache.org/dist/ant/binaries/apache-ant-1.8.4-bin.tar.gz | \
-    tar xvz -C /usr/local && \
-    mv /usr/local/apache-ant-1.8.4 /usr/local/apache-ant
-
-# Add android tools and platform tools to PATH
+  mv /usr/local/android-sdk-linux /usr/local/android-sdk && \
+  chown -R root:root /usr/local/android-sdk/
 ENV ANDROID_HOME /usr/local/android-sdk
-ENV PATH $PATH:$ANDROID_HOME/tools
-ENV PATH $PATH:$ANDROID_HOME/platform-tools
+ENV PATH $PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
 
-# Add ant to PATH
-ENV ANT_HOME /usr/local/apache-ant
-ENV PATH $PATH:$ANT_HOME/bin
-
-# Export JAVA_HOME variable
-ENV JAVA_HOME /usr/lib/jvm/java-7-oracle
-
-# Install latest android tools and system images
-RUN ( sleep 4 && while [ 1 ]; do sleep 1; echo y; done ) | android update sdk --no-ui --force -a --filter \
-    platform-tool,android-19,android-21,android-22,build-tools-22.0.1,sys-img-x86-android-19,sys-img-x86-android-21,sys-img-x86-android-22,sys-img-armeabi-v7a-android-19,sys-img-armeabi-v7a-android-21,sys-img-armeabi-v7a-android-22 && \
-    echo "y" | android update adb
+# Install Android Tools and system images
+RUN \
+  ( sleep 4 && while [ 1 ]; do sleep 1; echo y; done ) | android update sdk --no-ui --force -a --filter \
+    platform-tool,android-${ANDROID_PLATFORM_VERSION},build-tools-${ANDROID_PLATFORM_VERSION},sys-img-x86-google_apis-${ANDROID_PLATFORM_VERSION}
 
 # Create fake keymap file
-RUN mkdir /usr/local/android-sdk/tools/keymaps && \
-    touch /usr/local/android-sdk/tools/keymaps/en-us
+RUN \
+  mkdir /usr/local/android-sdk/tools/keymaps && \
+  touch /usr/local/android-sdk/tools/keymaps/en-us
 
-# Run sshd
-RUN mkdir /var/run/sshd && \
-    echo "root:$ROOTPASSWORD" | chpasswd && \
-    sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
-    sed 's@session\s*required\s*pam_loginuid.so@session optional pam_loginuid.so@g' -i /etc/pam.d/sshd && \
-    echo "export VISIBLE=now" >> /etc/profile
+# Miscellaneous packages - required to run AVD on 64bit machine
+RUN \
+  dpkg --add-architecture i386 && \
+  apt-get update && \
+  apt-get install -y \
+      libz1:i386 \
+      libncurses5:i386 \
+      libbz2-1.0:i386 \
+      libstdc++6:i386 \
+      socat \
+      net-tools
 
-ENV NOTVISIBLE "in users profile"
+# Create Android Emulator
+RUN \
+  echo "no" | /usr/local/android-sdk/tools/android create avd -n ${DEVICE_NAME} -t android-${ANDROID_PLATFORM_VERSION} -c 374M -s WXGA720 --abi google_apis/${ARCH} -f
 
 # Add entrypoint
 ADD entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
-ENTRYPOINT ["/entrypoint.sh"]
