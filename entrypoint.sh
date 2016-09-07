@@ -7,6 +7,11 @@ socat tcp-listen:5554,bind=$ip,fork tcp:127.0.0.1:5554 &
 socat tcp-listen:5555,bind=$ip,fork tcp:127.0.0.1:5555 &
 
 # Kill ADB server as ADB connection will be establishe from outside the docker image
-adb start-server
+adb kill-server
+
+if [[ $ARCH == *"armeabi-v7a"* ]]
+then
+    ARCH="arm"
+fi
 
 echo "no" | /usr/local/android-sdk/tools/emulator64-${ARCH} -avd ${DEVICE_NAME} -noaudio -no-window -gpu off -verbose -qemu -vnc :0
